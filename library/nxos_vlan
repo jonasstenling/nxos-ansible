@@ -69,8 +69,11 @@ options:
         aliases: []
     mode:
         description:
-            - Set VLAN mode to fabricpath or classical ethernet. Requires that
-              feature-set fabricpath is installed in the switch.
+            - Set VLAN mode to fabricpath or classical ethernet. The feature-set
+              fabricpath must be installed in the switch which requires the
+              ENHANCED_LAYER2_PKG license. Supported on Nexus 5500 with
+              NX-OS 5.1(3)N1(1) or later and on Nexus 7000 with NX-OS 5.1(1)
+              or later.
         required: false
         default: null
         choices: ['ce', 'fabricpath']
