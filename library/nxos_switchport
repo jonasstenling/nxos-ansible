@@ -72,17 +72,31 @@ options:
         aliases: []
     trunk_vlans:
         description:
-            - if mode=trunk, used as the vlan range to carry over trunk
+            - if mode=trunk and state=present:
+                - add vlans to trunk
+            - if mode=trunk and state=absent:
+                - remove vlans from trunk
+              
         required: false
         default: '1-4094'
         choices: []
         aliases: []
     state:
         description:
-            - Manage the state of the resource
+            - if state=present:
+                - if mode=access, set access port to vlan access_vlan
+                - if mode=trunk, set trunk port with native_vlan and
+                  add trunk_vlans as applicable
+            - if state=absent:
+                - if mode=access, remove access_vlan from access port
+                - if mode=trunk:
+                    if trunk_vlans is set: remove trunk_vlans from port 
+                    if trunk_vlans is not set: remove all vlans from port
+            - if state=default:
+                - set port to default configuration
         required: true
         default: null
-        choices: ['present','absent']
+        choices: ['present','absent', 'default']
         aliases: []
     host:
         description:
@@ -116,16 +130,25 @@ options:
 '''
 EXAMPLES = '''
 # Config a switchport to be a trunk interface with native vlan 10 and carriers vlan 2-100
-- nxos_switchport: interface=Ethernet1/1 mode=trunk native_vlan=10 trunk_vlans=2-100 host={{ inventory_hostname }}
+- nxos_switchport: interface=Ethernet1/1 mode=trunk native_vlan=10 trunk_vlans=2-100 host={{ inventory_hostname }} state=present
+
+# Config a switchport to be a trunk interface and add vlan 101-120 as allowed
+- nxos_switchport: interface=Ethernet1/1 mode=trunk trunk_vlans=101-120 host={{ inventory_hostname }} state=present
 
 # Config a switchport to an access port on vlan 20
-- nxos_switchport: interface=Ethernet1/2 mode=access access_vlan=20 host={{ inventory_hostname }}
+- nxos_switchport: interface=Ethernet1/2 mode=access access_vlan=20 host={{ inventory_hostname }} state=present
 
 # Remove existing access port vlan configuration on a switchport (mode is required)
 - nxos_switchport: interface=Ethernet1/2 host={{ inventory_hostname }} mode=access state=absent
 
-# Remove existing trunk port vlan configuration on a switchport (mode is required)
+# Modify existing trunk port vlan configuration on a switchport (mode is required) and remove all vlans
 - nxos_switchport: interface=Ethernet1/1 host={{ inventory_hostname }} mode=trunk state=absent
+
+# Modify existing trunk port vlan configuration on a switchport (mode is required) and remove vlan 1-100
+- nxos_switchport: interface=Ethernet1/1 host={{ inventory_hostname }} mode=trunk trunk_vlans=1-100 state=absent
+
+# Set switchport to default configuration
+- nxos_switchport: interface=Ethernet1/2 host={{ inventory_hostname }} state=default
 '''
 
 try:
@@ -148,8 +171,7 @@ def main():
             access_vlan=dict(type='str', default='1'),
             native_vlan=dict(type='str', default='1'),
             trunk_vlans=dict(type='str', default='1-4094'),
-            state=dict(choices=['absent', 'present'],
-                       default='present'),
+            state=dict(choices=['absent', 'present', 'default'],required=True),
             protocol=dict(choices=['http', 'https'], default='http'),
             host=dict(required=True),
             username=dict(),
