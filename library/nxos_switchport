@@ -72,31 +72,24 @@ options:
         aliases: []
     trunk_vlans:
         description:
-            - if mode=trunk and state=present:
-                - add vlans to trunk
-            - if mode=trunk and state=absent:
-                - remove vlans from trunk
-              
+            - vlan(s) to add or remove to a trunk when mode=trunk. Adding or removing is based on value of state parameter
         required: false
         default: '1-4094'
         choices: []
         aliases: []
     state:
         description:
-            - if state=present:
-                - if mode=access, set access port to vlan access_vlan
-                - if mode=trunk, set trunk port with native_vlan and
-                  add trunk_vlans as applicable
-            - if state=absent:
-                - if mode=access, remove access_vlan from access port
-                - if mode=trunk:
-                    if trunk_vlans is set: remove trunk_vlans from port 
-                    if trunk_vlans is not set: remove all vlans from port
-            - if state=default:
-                - set port to default configuration
+            - if state=present
+              if mode=access, set access port to vlan access_vlan
+              if mode=trunk, set trunk port with native_vlan and add trunk_vlans as applicable
+            - if state=absent
+              if mode=access, remove access_vlan from access port
+              if mode=trunk, remove trunk_vlans vlans (if trunk_vlans is set), otherwise remove all vlans
+            - if state=unconfigured
+              set port to unconfigured configuration, see examples for details
         required: true
         default: null
-        choices: ['present','absent', 'default']
+        choices: ['present','absent', 'unconfigured']
         aliases: []
     host:
         description:
@@ -129,26 +122,36 @@ options:
         aliases: []
 '''
 EXAMPLES = '''
-# Config a switchport to be a trunk interface with native vlan 10 and carriers vlan 2-100
-- nxos_switchport: interface=Ethernet1/1 mode=trunk native_vlan=10 trunk_vlans=2-100 host={{ inventory_hostname }} state=present
+# Config a switchport to be a trunk interface with native vlan 10 and vlan 2-100 allowed
+- nxos_switchport: interface=Ethernet1/1 mode=trunk native_vlan=10 trunk_vlans=2-100 host={{ inventory_hostname }}
 
-# Config a switchport to be a trunk interface and add vlan 101-120 as allowed
-- nxos_switchport: interface=Ethernet1/1 mode=trunk trunk_vlans=101-120 host={{ inventory_hostname }} state=present
+# Config a switchport to be a trunk interface and add vlan 1-100 as allowed
+- nxos_switchport: interface=Ethernet1/1 mode=trunk trunk_vlans=1-100 host={{ inventory_hostname }}
 
-# Config a switchport to an access port on vlan 20
-- nxos_switchport: interface=Ethernet1/2 mode=access access_vlan=20 host={{ inventory_hostname }} state=present
+# Config a switchport to be a trunk interface and add vlan 101 as allowed
+- nxos_switchport: interface=Ethernet1/1 mode=trunk trunk_vlans=101 host={{ inventory_hostname }}
+
+# Config a switchport to be an access port on vlan 20 (mode is required)
+- nxos_switchport: interface=Ethernet1/2 mode=access access_vlan=20 host={{ inventory_hostname }}
+
+# Config a switchport to be an access port on vlan 1 (mode is required)
+- nxos_switchport: interface=Ethernet1/2 host={{ inventory_hostname }} mode=access state=unconfigured
+
+# Config a switchport as a trunk port with all vlans permitted and vlan 1 as the native vlan
+- nxos_switchport: interface=Ethernet1/2 host={{ inventory_hostname }} mode=trunk state=unconfigured
 
 # Remove existing access port vlan configuration on a switchport (mode is required)
 - nxos_switchport: interface=Ethernet1/2 host={{ inventory_hostname }} mode=access state=absent
 
-# Modify existing trunk port vlan configuration on a switchport (mode is required) and remove all vlans
+# Modify existing trunk port vlan configuration on a switchport and remove all vlans (mode is required)
 - nxos_switchport: interface=Ethernet1/1 host={{ inventory_hostname }} mode=trunk state=absent
 
-# Modify existing trunk port vlan configuration on a switchport (mode is required) and remove vlan 1-100
+# Modify existing trunk port vlan configuration on a switchport and remove vlans 1-100 (mode is required)
 - nxos_switchport: interface=Ethernet1/1 host={{ inventory_hostname }} mode=trunk trunk_vlans=1-100 state=absent
 
-# Set switchport to default configuration
-- nxos_switchport: interface=Ethernet1/2 host={{ inventory_hostname }} state=default
+# Modify existing trunk port vlan configuration on a switchport and remove vlan 101 (mode is required)
+- nxos_switchport: interface=Ethernet1/1 host={{ inventory_hostname }} mode=trunk trunk_vlans=101 state=absent
+
 '''
 
 try:
