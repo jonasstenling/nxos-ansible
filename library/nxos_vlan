@@ -273,7 +273,7 @@ def main():
     results['state'] = state
     results['commands'] = final_commands
     results['changed'] = changed
-    results['msg'] = "vlan_id " + vlan_id + " state == " + state
+    results['vlan_id'] = vlan_id
 
     module.exit_json(**results)
 
