@@ -167,6 +167,7 @@ except ImportError as e:
 
 def main():
 
+
     module = AnsibleModule(
         argument_spec=dict(
             interface=dict(required=True, type='str'),
@@ -174,7 +175,7 @@ def main():
             access_vlan=dict(type='str', default='1'),
             native_vlan=dict(type='str', default='1'),
             trunk_vlans=dict(type='str', default='1-4094'),
-            state=dict(choices=['absent', 'present', 'default'],required=True),
+            state=dict(choices=['absent', 'present', 'unconfigured'],required=True),
             protocol=dict(choices=['http', 'https'], default='http'),
             host=dict(required=True),
             username=dict(),
@@ -271,29 +272,27 @@ def main():
             (existing['trunk_vlans'])
             )
         existing_trunks_list.sort()
-        if trunk_vlans_list == existing_trunks_list:
-            args['trunk_vlans'] = existing['trunk_vlans']
-
     proposed = {}
     changed = False
 
-    for param, value in args.iteritems():
-        if value:
-            # cleaning up proposed after popping unneeded k/v pairs
-            proposed[param] = value
 
     commands = []
 
     if state == 'absent':
-        if not nxapi_lib.is_switchport_default(existing):
-            command = nxapi_lib.remove_switchport_config(device,
-                                                         existing,
-                                                         interface)
-            commands.append(command)
-        elif nxapi_lib.is_switchport_default(existing) and mode == 'trunk':
-            command = ['interface ' + interface, 'no switchport mode trunk']
-            commands.append(command)
-    elif state == 'present':
+        if mode == 'trunk':
+            # if there are trunk_vlans currently permitted on the trunk,
+            # add them to args['trunk_vlans'], otherwise all vlans all already
+            # not permitted and args['trunk_vlans'] is not needed.
+            permitted_vlans = set(trunk_vlans_list).intersection(existing_trunks_list)
+            if permitted_vlans:
+                args['trunk_vlans'] = ','.join(permitted_vlans)
+            else:
+                args.pop('trunk_vlans')
+
+        for param, value in args.iteritems():
+            if value:
+                # cleaning up proposed after popping unneeded k/v pairs
+                proposed[param] = value
         delta = set(proposed.iteritems()).difference(existing.iteritems())
         if existing:
             if delta:
@@ -301,14 +300,85 @@ def main():
                     module.fail_json(msg='Cannot change L2 config on physical '
                                      + 'port because it is in a portchannel. '
                                      + 'You should update portchannel config.')
-                command = nxapi_lib.get_switchport_config_commands(device,
-                                                                   delta,
-                                                                   interface)
-                commands.append(command)
+                if mode == 'trunk':
+                    command = nxapi_lib.get_switchport_trunk_config_commands_remove_vlan(
+                                                                       device,
+                                                                       delta,
+                                                                       interface)
+                    commands.append(command)
+                elif mode == 'access':
+                    command = nxapi_lib.get_switchport_config_commands(
+                                                                       device,
+                                                                       delta,
+                                                                       interface)
+                    commands.append(command)
             command = nxapi_lib.clean_up_interface_vlan_configs(proposed,
                                                                 existing)
             if command:
                 commands.append(command)
+    elif state == 'present':
+        if mode == 'trunk':
+            # if there are trunk_vlans currently not permitted on the trunk,
+            # add them to args['trunk_vlans'], otherwise all vlans all already
+            # permitted and args['trunk_vlans'] is not needed.
+            not_permitted_vlans = set(trunk_vlans_list).difference(existing_trunks_list)
+            if not_permitted_vlans:
+                args['trunk_vlans'] = ','.join(not_permitted_vlans)
+            else:
+                args.pop('trunk_vlans')
+
+        for param, value in args.iteritems():
+            if value:
+                # cleaning up proposed after popping unneeded k/v pairs
+                proposed[param] = value
+        delta = set(proposed.iteritems()).difference(existing.iteritems())
+        if existing:
+            if delta:
+                if nxapi_lib.interface_is_portchannel(device, interface):
+                    module.fail_json(msg='Cannot change L2 config on physical '
+                                     + 'port because it is in a portchannel. '
+                                     + 'You should update portchannel config.')
+                if mode == 'trunk':
+                    command = nxapi_lib.get_switchport_trunk_config_commands_add_vlan(
+                                                                       device,
+                                                                       delta,
+                                                                       interface)
+                    commands.append(command)
+                elif mode == 'access':
+                    command = nxapi_lib.get_switchport_config_commands(
+                                                                       device,
+                                                                       delta,
+                                                                       interface)
+                    commands.append(command)
+            command = nxapi_lib.clean_up_interface_vlan_configs(proposed,
+                                                                existing)
+            if command:
+                commands.append(command)
+    elif state == 'unconfigured':
+        #
+        # unconfigured state for a trunk port:
+        # switchport mode trunk
+        # switchport trunk allowed vlan all
+        #
+        if not nxapi_lib.is_switchport_default(existing) and mode == 'trunk':
+            command = nxapi_lib.remove_switchport_config(device,
+                                                         existing,
+                                                         interface)
+            commands.append(command)
+            command = ['interface ' + interface,
+                       'switchport mode trunk',
+                       'switchport trunk allowed vlan all']
+            commands.append(command)
+        #
+        # unconfigured state for an access port:
+        # switchport mode access
+        # switchport access vlan 1
+        #
+        elif not nxapi_lib.is_switchport_default(existing) and mode == 'access':
+            command = nxapi_lib.remove_switchport_config(device,
+                                                         existing,
+                                                         interface)
+            commands.append(command)
 
     cmds = ''
     if commands:
