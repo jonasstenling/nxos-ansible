@@ -242,11 +242,11 @@ def main():
     if mode == 'access':
         args.pop('native_vlan')
         args.pop('trunk_vlans')
-        if state == 'absent':
-            # only removing if state = 'absent' because these are used for
-            # config clean up if state == present
-            existing.pop('native_vlan')
-            existing.pop('trunk_vlans')
+        #if state == 'absent':
+        #    # only removing if state = 'absent' because these are used for
+        #    # config clean up if state == present
+        #    existing.pop('native_vlan')
+        #    existing.pop('trunk_vlans')
         if access_vlan not in current_vlans:
             module.fail_json(msg='You are trying to config or remove a VLAN '
                              + 'on an interface that does not exist on the '
@@ -254,10 +254,10 @@ def main():
 
     elif mode == 'trunk':
         args.pop('access_vlan')
-        if state == 'absent':
-            # only removing if state = 'absent' because these are used for
-            # config clean up if state == present
-            existing.pop('access_vlan')
+        #if state == 'absent':
+        #    # only removing if state = 'absent' because these are used for
+        #    # config clean up if state == present
+        #    existing.pop('access_vlan')
         if native_vlan not in current_vlans:
             module.fail_json(msg='Your native vlan does not exist yet on the '
                              + 'switch yet. Add it first, please.',
@@ -290,22 +290,13 @@ def main():
             if trunk_vlans_list == existing_trunks_list:
                 args['trunk_vlans'] = nxapi_lib.vlan_list_to_range(trunk_vlans_list)
             else:
-                # if there are trunk_vlans currently permitted on the trunk,
-                # add them to args['trunk_vlans'], otherwise all vlans all already
-                # not permitted and args['trunk_vlans'] is not needed.
-                permitted_vlans = set(existing_trunks_list).intersection(trunk_vlans_list)
-                remove_vlans = set(permitted_vlans).union(trunk_vlans_list)
-                # if the difference of remove_vlans and existing_trunks_list
-                # is equal to remove_vlans it means that the currently
-                # permitted vlans are the same as the requested removal in
-                # remove_vlans, in that case pop args['trunk_vlans'], else add
-                # remove_vlans to args['trunk_vlans']
-                if set(remove_vlans).difference(existing_trunks_list) == remove_vlans:
-                    debug = "2"
-                    args.pop('trunk_vlans')
-                else:
+                # remove all trunk_vlans permitted on the trunk, if there
+                # are no trunk_vlans to remove, pop args['trunk_vlans']
+                remove_vlans = set(existing_trunks_list).intersection(trunk_vlans_list)
+                if remove_vlans:
                     args['trunk_vlans'] = nxapi_lib.vlan_list_to_range(remove_vlans)
-                    debug = "3"
+                else:
+                    args.pop('trunk_vlans')
         
         for param, value in args.iteritems():
             if value:
@@ -313,8 +304,8 @@ def main():
                 proposed[param] = value
         
         delta = set(proposed.iteritems()).difference(existing.iteritems())
-        # if args['trunk_vlans'] is set, always add it to delta since it's
-        # needed to add or remove vlans
+        # if args['trunk_vlans'] or args['access_vlan'] is set, always add it to 
+        # delta since it's needed to add or remove vlans
         if args.get('trunk_vlans'):
             delta.add(('trunk_vlans', args['trunk_vlans']))
         if args.get('access_vlan'):
@@ -332,8 +323,6 @@ def main():
                                                                        delta,
                                                                        interface)
                     commands.append(command)
-                    command = nxapi_lib.clean_up_interface_vlan_configs(proposed,
-                                                                        existing)
                     if command:
                         commands.append(command)
                 # for access ports, clear access_vlan from the port if it's
@@ -347,19 +336,23 @@ def main():
                         module.fail_json(msg='Cannot remove access_vlan from '
                                          + 'access port if given access_vlan '
                                          + 'is not equal to configured access_vlan.')
+            command = nxapi_lib.clean_up_interface_vlan_configs(proposed,
+                                                                existing)
+            if command:
+                commands.append(command)
 
     elif state == 'present':
         if mode == 'trunk':
             # catch case where no vlans are permitted on the trunk
             if 'none' in existing_trunks_list:
                 existing_trunks_list = []
-            # if the vlans that we want to add are the same as all vlans
+            # if the vlans that we want to add are the same as the vlans
             # currently permitted on the trunk pop args['trunk_vlans'] directly. 
             if trunk_vlans_list == existing_trunks_list:
                 args.pop('trunk_vlans')
             else:
-                # add all vlans not already permitted on the trunk, if there
-                # are no vlans to add, pop args['trunk_vlans']
+                # add all trunk_vlans not already permitted on the trunk, if there
+                # are no trunk_vlans to add, pop args['trunk_vlans']
                 permitted_vlans = set(existing_trunks_list).intersection(trunk_vlans_list)
                 add_vlans = set(trunk_vlans_list).difference(permitted_vlans)
                 if add_vlans:
@@ -373,10 +366,12 @@ def main():
                 proposed[param] = value
         delta = set(proposed.iteritems()).difference(existing.iteritems())
 
-        # if args['trunk_vlans'] is set, always add it to delta since it's
-        # needed to add or remove vlans
+        # if args['trunk_vlans'] or args['access_vlan'] is set, always add it to
+        # delta since it's needed to add or remove vlans
         if args.get('trunk_vlans'):
             delta.add(('trunk_vlans', args['trunk_vlans']))
+        if args.get('access_vlan'):
+            delta.add(('access_vlan', args['access_vlan']))
         
         if existing:
             if delta:
@@ -391,11 +386,12 @@ def main():
                                                                        interface)
                     commands.append(command)
                 elif mode == 'access':
-                    command = nxapi_lib.get_switchport_config_commands(
-                                                                       device,
-                                                                       delta,
-                                                                       interface)
-                    commands.append(command)
+                    if existing['access_vlan'] != proposed['access_vlan']:
+                        command = nxapi_lib.get_switchport_config_commands(
+                                                                           device,
+                                                                           delta,
+                                                                           interface)
+                        commands.append(command)
             command = nxapi_lib.clean_up_interface_vlan_configs(proposed,
                                                                 existing)
             if command:

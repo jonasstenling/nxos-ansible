@@ -1,0 +1,296 @@
+#
+# Written by Jonas Stenling <jonas@stenling.se>
+# 
+# This test plan is by no means complete, but it's a start.
+# It will do basic verification of all states and add and remove
+# of vlans for trunk and access ports.
+#
+
+---
+
+- name: trunk port test cases 
+  hosts: n5k
+  connection: local
+  tasks:    
+    - name: configure switch port to starting state 1
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: unconfigured
+        mode: trunk
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+    - name: configure switch port to starting state 2
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 1-4094
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+    - name: configure switch port to unconfigured state (permit all vlans)
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: unconfigured
+        mode: trunk
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned
+
+    - name: Test1 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "'interface ethernet1/4 ; switchport mode trunk ; switchport trunk allowed vlan all ;' in returned.commands"
+          - returned.changed == true
+    - name: configure switch port to unconfigured state (permit all vlans)
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: unconfigured
+        mode: trunk
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test2 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: configure switch port to permit only vlan 1-100 
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 101-4094
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test3 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - returned.new.trunk_vlans == "1-100"
+          - returned.changed == true
+    - name: configure switch port to permit only vlan 1-100 
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 101-4094
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test4 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: configure switch port to permit vlan 102-200
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        mode: trunk
+        trunk_vlans: 102-200
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test5 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.new.trunk_vlans == '1-100,102-200'"
+          - returned.changed == true
+    - name: configure switch port to permit vlan 102-200
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        mode: trunk
+        trunk_vlans: 102-200
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test6 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: configure switch port to remove vlan 10-20,23-30
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 10-20,23-30
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test7 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.new.trunk_vlans == '1-9,21-22,31-100,102-200'"
+          - returned.changed == true
+    - name: configure switch port to remove vlan 10-20,23-30
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 10-20,23-30
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test8 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: configure switch port to add all vlans and set native_vlans to 10
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        mode: trunk
+        trunk_vlans: 1-4094
+        native_vlan: 10    
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test9 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.proposed.trunk_vlans == '10-20,23-30,101-101,201-4094'"
+          - "returned.new.trunk_vlans == '1-4094'"
+          - returned.new.native_vlan == "10"
+          - returned.changed == true
+    - name: configure switch port to add all vlans and set native_vlans to 10
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        mode: trunk
+        trunk_vlans: 1-4094
+        native_vlan: 10    
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test10 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: configure switch port to remove all vlans
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 1-4094
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test11 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.new.trunk_vlans == 'none'"
+          - "returned.proposed.trunk_vlans == '1-4094'"
+          - returned.changed == true
+    - name: configure switch port to remove all vlans
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: trunk
+        trunk_vlans: 1-4094
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test12 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+
+- name: access port test cases 
+  hosts: n5k
+  connection: local
+  tasks:    
+    - name: configure access switch port to unconfigured state
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: unconfigured
+        mode: access
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test13 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.new.mode == 'access'"
+          - "returned.new.access_vlan == '1'"
+          - returned.changed == true
+    - name: configure access switch port to unconfigured state
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: unconfigured
+        mode: access
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test14 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: configure access switch port to vlan id 10
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        mode: access
+        access_vlan: 10    
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test15 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.new.mode == 'access'"
+          - "returned.new.access_vlan == '10'"
+          - returned.changed == true
+    - name: configure access switch port to vlan id 10
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        mode: access
+        access_vlan: 10    
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test16 - ensure correct commands were sent to switch and changed == False
+      assert:
+        that:
+          - returned.commands == ""
+          - returned.changed == false
+    - name: remove vlan 10 from access switch port
+      nxos_switchport: 
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: absent
+        mode: access
+        access_vlan: 10    
+        interface: Ethernet1/4
+        host: "{{ inventory_hostname }}"
+      register: returned      
+    - name: Test17 - ensure correct commands were sent to switch and changed == True
+      assert:
+        that:
+          - "returned.new.mode == 'access'"
+          - "returned.new.access_vlan == '1'"
+          - returned.changed == true
