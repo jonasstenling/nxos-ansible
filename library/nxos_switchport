@@ -242,11 +242,11 @@ def main():
     if mode == 'access':
         args.pop('native_vlan')
         args.pop('trunk_vlans')
-        #if state == 'absent':
-        #    # only removing if state = 'absent' because these are used for
-        #    # config clean up if state == present
-        #    existing.pop('native_vlan')
-        #    existing.pop('trunk_vlans')
+        if state == 'absent':
+            # only removing if state = 'absent' because these are used for
+            # config clean up if state == present
+            existing.pop('native_vlan')
+            existing.pop('trunk_vlans')
         if access_vlan not in current_vlans:
             module.fail_json(msg='You are trying to config or remove a VLAN '
                              + 'on an interface that does not exist on the '
@@ -254,10 +254,10 @@ def main():
 
     elif mode == 'trunk':
         args.pop('access_vlan')
-        #if state == 'absent':
-        #    # only removing if state = 'absent' because these are used for
-        #    # config clean up if state == present
-        #    existing.pop('access_vlan')
+        if state == 'absent':
+            # only removing if state = 'absent' because these are used for
+            # config clean up if state == present
+            existing.pop('access_vlan')
         if native_vlan not in current_vlans:
             module.fail_json(msg='Your native vlan does not exist yet on the '
                              + 'switch yet. Add it first, please.',
@@ -278,7 +278,6 @@ def main():
 
     commands = []
 
-    debug = None
 
     if state == 'absent':
         if mode == 'trunk':
@@ -329,7 +328,6 @@ def main():
                 # configured
                 elif mode == 'access':
                     if existing['access_vlan'] == proposed['access_vlan']:
-                        debug = "access"
                         commands.append(['interface ' + interface,
                                          'no switchport access vlan'])
                     else:    
@@ -443,8 +441,6 @@ def main():
     results['state'] = state
     results['commands'] = cmds
     results['changed'] = changed
-    if debug:
-        results['debug'] = str(debug)
 
     module.exit_json(**results)
 
