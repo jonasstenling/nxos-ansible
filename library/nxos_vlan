@@ -67,6 +67,17 @@ options:
         default: present
         choices: ['present','absent']
         aliases: []
+    mode:
+        description:
+            - Set VLAN mode to fabricpath or classical ethernet. The feature-set
+              fabricpath must be installed in the switch which requires the
+              ENHANCED_LAYER2_PKG license. Supported on Nexus 5500 with
+              NX-OS 5.1(3)N1(1) or later and on Nexus 7000 with NX-OS 5.1(1)
+              or later.
+        required: false
+        default: null
+        choices: ['ce', 'fabricpath']
+        aliases: []
     host:
         description:
             - IP Address or hostname (resolvable by Ansible control host)
@@ -140,6 +151,7 @@ def main():
             name=dict(default=None),
             vlan_state=dict(choices=['active', 'suspend'], default='active'),
             state=dict(choices=['present', 'absent'], default='present'),
+            mode=dict(choices=['ce', 'fabricpath'], default=None),
             admin_state=dict(choices=['up', 'down'], default='up'),
             protocol=dict(choices=['http', 'https'], default='http'),
             host=dict(required=True),
@@ -160,13 +172,14 @@ def main():
     vlan_state = module.params['vlan_state']
     admin_state = module.params['admin_state']
     state = module.params['state']
+    mode = module.params['mode']
 
     device = Device(ip=host, username=username, password=password,
                     protocol=protocol)
 
     changed = False
     proposed = dict(vlan_id=vlan_id, name=name, vlan_state=vlan_state,
-                    admin_state=admin_state)
+                    admin_state=admin_state, mode=mode)
 
     proposed_vlans_list = nxapi_lib.vlan_range_to_list(vlan_id)
     proposed_vlans_list.sort()
@@ -222,6 +235,7 @@ def main():
             proposed = dict(vlan_id=vlan,
                             vlan_state=vlan_state,
                             admin_state=admin_state,
+                            mode=mode,
                             name=name)
             delta = set(proposed.iteritems()).difference(existing.iteritems())
             if delta:
@@ -239,7 +253,8 @@ def main():
         final_existing[vlan] = existing
         final_proposed[vlan] = dict(vlan_id=vlan,
                                     vlan_state=vlan_state,
-                                    admin_state=admin_state)
+                                    admin_state=admin_state,
+                                    mode=mode)
 
     if final_commands:
         if module.check_mode:
@@ -258,6 +273,7 @@ def main():
     results['state'] = state
     results['commands'] = final_commands
     results['changed'] = changed
+    results['vlan_id'] = vlan_id
 
     module.exit_json(**results)
 
