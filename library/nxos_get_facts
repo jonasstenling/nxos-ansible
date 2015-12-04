@@ -101,7 +101,6 @@ def main():
             host=dict(required=True),
             username=dict(type='str'),
             password=dict(type='str'),
-            port=dict(type='int'),
         ),
         supports_check_mode=False
     )
@@ -110,14 +109,12 @@ def main():
     username = module.params['username'] or auth.username
     password = module.params['password'] or auth.password
     protocol = module.params['protocol']
-    port = module.params['port']
     host = socket.gethostbyname(module.params['host'])
-
 
     detail = module.params['detail']
 
     device = Device(ip=host, username=username, password=password,
-                    protocol=protocol, port=port)
+                    protocol=protocol)
 
     facts = nxapi_lib.get_facts(device)
 
